@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Network Security Voice Scanner</title>
+  <style>
+    :root {
+      --bg: #0a0e1a;
+      --panel: #111827;
+      --border: #1e2d45;
+      --accent: #00d4ff;
+      --accent2: #7c3aed;
+      --danger: #ef4444;
+      --warn: #f59e0b;
+      --ok: #10b981;
+      --text: #e2e8f0;
+      --muted: #64748b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      padding: 24px;
+    }
+
+    .header {
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .header p {
+      color: var(--muted);
+      margin-top: 6px;
+      font-size: 0.9rem;
+    }
+
+    .orb-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .orb {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #1a3a5c, #0a0e1a);
+      border: 2px solid var(--border);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .orb::before {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      background: conic-gradient(var(--accent), var(--accent2), var(--accent));
+      z-index: -1;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .orb.active::before { opacity: 1; animation: spin 2s linear infinite; }
+    .orb.speaking::before { opacity: 1; background: conic-gradient(var(--ok), #00ff88, var(--ok)); animation: spin 1s linear infinite; }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    .orb svg { width: 52px; height: 52px; opacity: 0.85; transition: all 0.3s; }
+    .orb.active svg, .orb.speaking svg { opacity: 1; }
+
+    .pulse-ring {
+      position: absolute;
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      border: 1px solid var(--accent);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .orb.active .pulse-ring, .orb.speaking .pulse-ring {
+      animation: pulse 1.8s ease-out infinite;
+    }
+    @keyframes pulse {
+      0%   { transform: scale(1); opacity: 0.6; }
+      100% { transform: scale(1.4); opacity: 0; }
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      transition: all 0.3s;
+    }
+    .status-badge .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s;
+    }
+    .status-badge.idle   .dot { background: var(--muted); }
+    .status-badge.active .dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: blink 1s ease-in-out infinite; }
+    .status-badge.speak  .dot { background: var(--ok);    box-shadow: 0 0 6px var(--ok); }
+    .status-badge.scan   .dot { background: var(--warn);  box-shadow: 0 0 6px var(--warn); animation: blink 0.5s ease-in-out infinite; }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    .transcript-box {
+      width: 100%;
+      max-width: 520px;
+      min-height: 120px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      font-size: 0.875rem;
+      line-height: 1.6;
+      color: var(--text);
+      overflow-y: auto;
+      max-height: 260px;
+    }
+
+    .transcript-box p { margin: 4px 0; }
+    .transcript-box .user { color: var(--accent); }
+    .transcript-box .assistant { color: var(--ok); }
+    .transcript-box .system { color: var(--muted); font-style: italic; }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+    }
+    .btn-primary:hover { filter: brightness(1.15); }
+    .btn-danger {
+      background: var(--panel);
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+    .btn-danger:hover { background: var(--danger); color: #fff; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-align: center;
+      max-width: 360px;
+    }
+    .hint kbd {
+      background: var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: monospace;
+    }
+
+    #error-banner {
+      display: none;
+      background: #2d1515;
+      border: 1px solid var(--danger);
+      color: var(--danger);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 0.8rem;
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Network Security Voice Scanner</h1>
+    <p>Voice-controlled nmap scanning powered by VAPI + Claude</p>
+  </div>
+
+  <div class="orb-wrapper">
+    <div class="orb" id="orb">
+      <div class="pulse-ring"></div>
+      <!-- Microphone icon -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round"
+          d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="status-badge idle" id="badge">
+    <span class="dot"></span>
+    <span id="badge-text">Ready</span>
+  </div>
+
+  <div id="error-banner"></div>
+
+  <div class="transcript-box" id="transcript">
+    <p class="system">Transcript will appear here once the call starts…</p>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-primary" id="startBtn">Start Session</button>
+    <button class="btn btn-danger" id="stopBtn" disabled>End Call</button>
+  </div>
+
+  <p class="hint" id="hint-idle">
+    Click <kbd>Start Session</kbd>, then hold the orb to speak.<br/>
+    Say <kbd>scan my network</kbd> to begin an nmap scan.
+  </p>
+
+  <script type="module">
+    // Load VAPI web SDK from ESM CDN
+    const { default: Vapi } = await import('https://esm.sh/@vapi-ai/web@2');
+
+    // Fetch runtime config written by main.py
+    let cfg;
+    try {
+      const r = await fetch('/config.json');
+      cfg = await r.json();
+    } catch {
+      showError('Could not load /config.json — make sure main.py is running.');
+      throw new Error('no config');
+    }
+
+    const vapi = new Vapi(cfg.publicKey);
+
+    const orb       = document.getElementById('orb');
+    const badge     = document.getElementById('badge');
+    const badgeText = document.getElementById('badge-text');
+    const startBtn  = document.getElementById('startBtn');
+    const stopBtn   = document.getElementById('stopBtn');
+    const tx        = document.getElementById('transcript');
+
+    function setStatus(state, label) {
+      badge.className = `status-badge ${state}`;
+      badgeText.textContent = label;
+      orb.className = `orb ${state === 'active' || state === 'speak' ? 'active' : state === 'scan' ? 'active' : ''}`;
+      if (state === 'speak') orb.classList.add('speaking');
+    }
+
+    function addLine(role, text) {
+      const p = document.createElement('p');
+      p.className = role;
+      p.textContent = (role === 'user' ? 'You: ' : role === 'assistant' ? 'AI: ' : '') + text;
+      if (tx.querySelector('.system')) tx.innerHTML = '';
+      tx.appendChild(p);
+      tx.scrollTop = tx.scrollHeight;
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-banner');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    // ── VAPI event listeners ──────────────────────────────────────────────────
+
+    let callActive = false;
+
+    vapi.on('call-start', () => {
+      callActive = true;
+      vapi.setMuted(true);          // start muted — user must hold to speak
+      setStatus('idle', 'Hold orb to speak');
+      startBtn.disabled = true;
+      stopBtn.disabled  = false;
+      addLine('system', 'Call started — hold the orb to speak');
+    });
+
+    vapi.on('call-end', () => {
+      callActive = false;
+      setStatus('idle', 'Ready');
+      startBtn.disabled = false;
+      stopBtn.disabled  = true;
+      addLine('system', 'Call ended');
+    });
+
+    vapi.on('speech-start', () => {
+      setStatus('speak', 'AI Speaking');
+    });
+
+    vapi.on('speech-end', () => {
+      setStatus('idle', 'Hold orb to speak');
+    });
+
+    vapi.on('message', (msg) => {
+      if (msg.type === 'transcript') {
+        if (msg.transcriptType === 'final') {
+          if (msg.role === 'user') addLine('user', msg.transcript);
+          if (msg.role === 'assistant') addLine('assistant', msg.transcript);
+        }
+      }
+      if (msg.type === 'tool-calls') {
+        setStatus('scan', 'Scanning Network…');
+        addLine('system', 'Running nmap scan — please wait…');
+      }
+      if (msg.type === 'tool-calls-result') {
+        setStatus('speak', 'AI Speaking');
+      }
+    });
+
+    vapi.on('error', (err) => {
+      console.error('VAPI error', err);
+      showError(`Error: ${err?.message || JSON.stringify(err)}`);
+      setStatus('idle', 'Error');
+      startBtn.disabled = false;
+      stopBtn.disabled  = true;
+    });
+
+    // ── Controls ──────────────────────────────────────────────────────────────
+
+    startBtn.addEventListener('click', async () => {
+      startBtn.disabled = true;
+      setStatus('active', 'Connecting…');
+      try {
+        await vapi.start(cfg.assistantId);
+      } catch (e) {
+        showError(`Failed to start call: ${e.message}`);
+        startBtn.disabled = false;
+        setStatus('idle', 'Ready');
+      }
+    });
+
+    stopBtn.addEventListener('click', () => {
+      vapi.stop();
+    });
+
+    function startSpeaking() {
+      if (!callActive) return;
+      vapi.setMuted(false);
+      setStatus('active', 'Listening…');
+    }
+
+    function stopSpeaking() {
+      if (!callActive) return;
+      vapi.setMuted(true);
+      setStatus('idle', 'Hold orb to speak');
+    }
+
+    orb.addEventListener('mousedown',  startSpeaking);
+    orb.addEventListener('mouseup',    stopSpeaking);
+    orb.addEventListener('mouseleave', stopSpeaking);
+    orb.addEventListener('touchstart', (e) => { e.preventDefault(); startSpeaking(); }, { passive: false });
+    orb.addEventListener('touchend',   (e) => { e.preventDefault(); stopSpeaking(); },  { passive: false });
+
+    orb.addEventListener('click', () => {
+      if (!callActive && !startBtn.disabled) startBtn.click();
+    });
+  </script>
+</body>
+</html>
