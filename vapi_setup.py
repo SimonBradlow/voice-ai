@@ -91,7 +91,7 @@ def create_assistant(api_key: str, webhook_url: str) -> dict:
                             "required": [],
                         },
                     },
-                    "server": {"url": f"{webhook_url}/webhook"},
+                    "server": {"url": f"{webhook_url}/webhook", "timeoutSeconds": 60},
                 },
                 {
                     "type": "function",
@@ -137,7 +137,7 @@ def create_assistant(api_key: str, webhook_url: str) -> dict:
         },
         "endCallFunctionEnabled": True,
         "recordingEnabled": False,
-        "silenceTimeoutSeconds": 30,
+        "silenceTimeoutSeconds": 120,
         "maxDurationSeconds": 600,
     }
 
