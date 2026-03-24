@@ -156,6 +156,11 @@ def run_network_scan(target: str | None = None) -> dict:
     }
 
 
+def _voice_ip(ip: str) -> str:
+    """Format an IP address for natural TTS reading: 192.168.1.1 → 192 168 1 1"""
+    return ip.replace(".", " ")
+
+
 def format_for_voice(result: dict) -> str:
     """Convert a scan result dict into a concise, voice-friendly summary."""
     if "error" in result:
@@ -171,28 +176,22 @@ def format_for_voice(result: dict) -> str:
 
     parts.append(
         f"Scan complete. I found {hosts} device{'s' if hosts != 1 else ''} "
-        f"on your network {network}."
+        f"on your network."
     )
 
-    # Per-device summary
-    for dev in result["devices"]:
-        ip = dev["ip"]
-        hn = dev["hostname"] if dev["hostname"] != ip else None
+    # Per-device summary — skip devices with no open ports to keep it brief
+    flagged_devs = [d for d in result["devices"] if d["open_ports"]]
+    for dev in flagged_devs[:8]:
+        ip = _voice_ip(dev["ip"])
         vendor = dev["vendor"]
         ports = dev["open_ports"]
-
-        line = f"Device at {ip}"
-        if hn:
-            line += f" — hostname {hn}"
+        port_strs = [f"port {p['port']} ({p['service']})" for p in ports[:3]]
+        line = f"Device {ip}"
         if vendor != "Unknown device":
-            line += f" — running {vendor}"
-        if ports:
-            port_strs = [
-                f"port {p['port']} ({p['service']})" for p in ports[:4]
-            ]
-            line += f". Open ports: {', '.join(port_strs)}"
-            if len(ports) > 4:
-                line += f" and {len(ports) - 4} more"
+            line += f", running {vendor}"
+        line += f". Open: {', '.join(port_strs)}"
+        if len(ports) > 3:
+            line += f" and {len(ports) - 3} more"
         parts.append(line + ".")
 
     # Security summary
@@ -204,7 +203,7 @@ def format_for_voice(result: dict) -> str:
         )
         if critical:
             parts.append(
-                f"{critical} CRITICAL issue{'s' if critical != 1 else ''} require immediate action!"
+                f"{critical} CRITICAL issue{'s' if critical != 1 else ''} require immediate attention."
             )
         if high:
             parts.append(
@@ -213,14 +212,13 @@ def format_for_voice(result: dict) -> str:
 
         for risk in risks[:6]:
             parts.append(
-                f"On {risk['host']}, port {risk['port']} ({risk['service']}) "
+                f"On device {_voice_ip(risk['host'])}, port {risk['port']} ({risk['service']}) "
                 f"is {risk['severity']}: {risk['description']}."
             )
 
         if len(risks) > 6:
             parts.append(
-                f"Plus {len(risks) - 6} additional lower-severity findings — "
-                f"check the terminal for the complete report."
+                f"Plus {len(risks) - 6} additional lower-severity findings."
             )
 
     return " ".join(parts)

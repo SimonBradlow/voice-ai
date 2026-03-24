@@ -3,394 +3,576 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Network Security Voice Scanner</title>
+  <title>NET-SCAN // SECURITY TERMINAL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0a0e1a;
-      --panel: #111827;
-      --border: #1e2d45;
-      --accent: #00d4ff;
-      --accent2: #7c3aed;
-      --danger: #ef4444;
-      --warn: #f59e0b;
-      --ok: #10b981;
-      --text: #e2e8f0;
-      --muted: #64748b;
+      --green:  #00ff41;
+      --green2: #00dd44;
+      --dim:    #2d8a2d;
+      --amber:  #ffb000;
+      --red:    #ff3333;
+      --bg:     #060a06;
+      --panel:  #0a100a;
+      --border: #1a3a1a;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #020302;
+      color: var(--green);
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
       min-height: 100vh;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 32px;
       padding: 24px;
     }
 
-    .header {
-      text-align: center;
-    }
-    .header h1 {
-      font-size: 1.75rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .header p {
-      color: var(--muted);
-      margin-top: 6px;
-      font-size: 0.9rem;
+    /* ── CRT screen wrapper ─────────────────────────────────── */
+    .crt {
+      width: 100%;
+      max-width: 680px;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      box-shadow:
+        0 0 0 1px #0a0a0a,
+        0 0 40px rgba(0, 255, 65, 0.08),
+        0 0 80px rgba(0, 255, 65, 0.04),
+        inset 0 0 60px rgba(0,0,0,0.6);
+      position: relative;
+      overflow: hidden;
     }
 
-    .orb-wrapper {
-      position: relative;
+    /* scanlines */
+    .crt::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 3px,
+        rgba(0,0,0,0.18) 3px,
+        rgba(0,0,0,0.18) 4px
+      );
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* vignette */
+    .crt::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.55) 100%);
+      pointer-events: none;
+      z-index: 11;
+    }
+
+    /* ── Title bar ──────────────────────────────────────────── */
+    .titlebar {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      letter-spacing: 0.12em;
+    }
+    .titlebar-left { color: var(--green); text-shadow: 0 0 8px var(--green); }
+    .titlebar-right { color: var(--dim); }
+    .titlebar .blink { animation: blink 1.2s step-end infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* ── Main content ───────────────────────────────────────── */
+    .screen {
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── Orb / mic button ───────────────────────────────────── */
+    .orb-row {
       display: flex;
       align-items: center;
       justify-content: center;
     }
 
     .orb {
-      width: 140px;
-      height: 140px;
+      width: 110px;
+      height: 110px;
       border-radius: 50%;
-      background: radial-gradient(circle at 35% 35%, #1a3a5c, #0a0e1a);
-      border: 2px solid var(--border);
+      border: 2px solid var(--dim);
+      background: var(--panel);
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.3s ease;
       position: relative;
-      overflow: hidden;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .orb:hover { border-color: var(--green2); }
+
+    .orb.listening {
+      border-color: var(--green);
+      box-shadow: 0 0 18px rgba(0,255,65,0.4), inset 0 0 18px rgba(0,255,65,0.08);
+    }
+    .orb.speaking {
+      border-color: var(--amber);
+      box-shadow: 0 0 18px rgba(255,176,0,0.35), inset 0 0 18px rgba(255,176,0,0.06);
+    }
+    .orb.scanning {
+      border-color: var(--amber);
+      box-shadow: 0 0 18px rgba(255,176,0,0.35), inset 0 0 18px rgba(255,176,0,0.06);
+      animation: orb-pulse 1.4s ease-in-out infinite;
     }
 
-    .orb::before {
-      content: '';
-      position: absolute;
-      inset: -4px;
-      border-radius: 50%;
-      background: conic-gradient(var(--accent), var(--accent2), var(--accent));
-      z-index: -1;
-      opacity: 0;
-      transition: opacity 0.3s;
+    @keyframes orb-pulse {
+      0%, 100% { box-shadow: 0 0 18px rgba(255,176,0,0.35), inset 0 0 18px rgba(255,176,0,0.06); }
+      50%       { box-shadow: 0 0 32px rgba(255,176,0,0.6),  inset 0 0 24px rgba(255,176,0,0.1); }
     }
 
-    .orb.active::before { opacity: 1; animation: spin 2s linear infinite; }
-    .orb.speaking::before { opacity: 1; background: conic-gradient(var(--ok), #00ff88, var(--ok)); animation: spin 1s linear infinite; }
+    /* mic icon */
+    .icon-mic { display: block; }
+    .icon-mic svg { width: 44px; height: 44px; color: var(--dim); transition: color 0.2s; }
+    .orb.listening .icon-mic svg { color: var(--green); filter: drop-shadow(0 0 6px var(--green)); }
+
+    /* cog icon (shown during scan/think) */
+    .icon-cog { display: none; }
+    .icon-cog svg { width: 44px; height: 44px; color: var(--amber); filter: drop-shadow(0 0 6px var(--amber)); }
+    .orb.thinking .icon-cog svg { color: var(--dim); filter: drop-shadow(0 0 4px var(--dim)); }
+    .orb.scanning .icon-mic,
+    .orb.thinking .icon-mic { display: none; }
+    .orb.scanning .icon-cog,
+    .orb.thinking .icon-cog { display: block; }
+    .orb.scanning .icon-cog svg { animation: spin 1.6s linear infinite; }
+    .orb.thinking .icon-cog svg { animation: spin 2.4s linear infinite; }
+
+    /* speaking waveform bars */
+    .icon-wave { display: none; gap: 3px; align-items: center; }
+    .icon-wave span {
+      display: block; width: 4px; background: var(--amber);
+      border-radius: 2px;
+      box-shadow: 0 0 4px var(--amber);
+      animation: wave 0.8s ease-in-out infinite;
+    }
+    .icon-wave span:nth-child(1) { height: 10px; animation-delay: 0s; }
+    .icon-wave span:nth-child(2) { height: 22px; animation-delay: 0.1s; }
+    .icon-wave span:nth-child(3) { height: 32px; animation-delay: 0.2s; }
+    .icon-wave span:nth-child(4) { height: 22px; animation-delay: 0.3s; }
+    .icon-wave span:nth-child(5) { height: 10px; animation-delay: 0.4s; }
+    .orb.speaking .icon-mic  { display: none; }
+    .orb.speaking .icon-wave { display: flex; }
+    @keyframes wave {
+      0%, 100% { transform: scaleY(0.5); opacity: 0.6; }
+      50%       { transform: scaleY(1.0); opacity: 1; }
+    }
 
     @keyframes spin {
       from { transform: rotate(0deg); }
       to   { transform: rotate(360deg); }
     }
 
-    .orb svg { width: 52px; height: 52px; opacity: 0.85; transition: all 0.3s; }
-    .orb.active svg, .orb.speaking svg { opacity: 1; }
+    /* ── Status line ────────────────────────────────────────── */
+    .status-line {
+      font-size: 0.9rem;
+      letter-spacing: 0.1em;
+      text-align: center;
+      color: var(--dim);
+      min-height: 1.2em;
+      transition: color 0.2s;
+    }
+    .status-line.green  { color: var(--green);  text-shadow: 0 0 6px var(--green); }
+    .status-line.amber  { color: var(--amber);  text-shadow: 0 0 6px var(--amber); }
+    .status-line.red    { color: var(--red);    text-shadow: 0 0 6px var(--red); }
 
-    .pulse-ring {
-      position: absolute;
-      width: 160px;
-      height: 160px;
-      border-radius: 50%;
-      border: 1px solid var(--accent);
-      opacity: 0;
-      pointer-events: none;
-    }
-    .orb.active .pulse-ring, .orb.speaking .pulse-ring {
-      animation: pulse 1.8s ease-out infinite;
-    }
-    @keyframes pulse {
-      0%   { transform: scale(1); opacity: 0.6; }
-      100% { transform: scale(1.4); opacity: 0; }
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 16px;
-      border-radius: 20px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
+    /* ── Terminal transcript ─────────────────────────────────── */
+    .terminal {
+      background: #030603;
       border: 1px solid var(--border);
-      background: var(--panel);
-      transition: all 0.3s;
-    }
-    .status-badge .dot {
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      background: var(--muted);
-      transition: background 0.3s;
-    }
-    .status-badge.idle   .dot { background: var(--muted); }
-    .status-badge.active .dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: blink 1s ease-in-out infinite; }
-    .status-badge.speak  .dot { background: var(--ok);    box-shadow: 0 0 6px var(--ok); }
-    .status-badge.scan   .dot { background: var(--warn);  box-shadow: 0 0 6px var(--warn); animation: blink 0.5s ease-in-out infinite; }
-
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.3; }
-    }
-
-    .transcript-box {
-      width: 100%;
-      max-width: 520px;
-      min-height: 120px;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px 20px;
-      font-size: 0.875rem;
-      line-height: 1.6;
-      color: var(--text);
+      border-radius: 4px;
+      padding: 14px 16px;
+      min-height: 180px;
+      max-height: 320px;
       overflow-y: auto;
-      max-height: 260px;
+      font-size: 0.97rem;
+      line-height: 1.7;
+      scrollbar-width: thin;
+      scrollbar-color: var(--dim) transparent;
+    }
+    .terminal::-webkit-scrollbar { width: 4px; }
+    .terminal::-webkit-scrollbar-thumb { background: var(--dim); }
+
+    .terminal .line { display: grid; grid-template-columns: max-content 1fr; gap: 8px; }
+    .terminal .line .prompt { color: var(--dim); }
+    .terminal .line .text   { color: var(--green); word-break: break-word; min-width: 0; }
+
+    .terminal .line.user     .prompt { color: var(--green2); }
+    .terminal .line.user     .text   { color: var(--green2); }
+    .terminal .line.ai       .prompt { color: var(--amber); }
+    .terminal .line.ai       .text   { color: var(--amber); text-shadow: 0 0 4px rgba(255,176,0,0.3); }
+    .terminal .line.system   .prompt { color: var(--dim); }
+    .terminal .line.system   .text   { color: #4db84d; }
+    .terminal .line.error    .prompt { color: var(--red); }
+    .terminal .line.error    .text   { color: var(--red); }
+
+    /* blinking cursor appended to last line */
+    .cursor {
+      display: inline-block;
+      width: 8px; height: 1em;
+      background: var(--green);
+      vertical-align: text-bottom;
+      margin-left: 2px;
+      animation: blink 1s step-end infinite;
     }
 
-    .transcript-box p { margin: 4px 0; }
-    .transcript-box .user { color: var(--accent); }
-    .transcript-box .assistant { color: var(--ok); }
-    .transcript-box .system { color: var(--muted); font-style: italic; }
-
+    /* ── Controls ───────────────────────────────────────────── */
     .controls {
       display: flex;
       gap: 12px;
+      justify-content: center;
     }
 
     .btn {
-      padding: 10px 24px;
-      border-radius: 8px;
-      font-size: 0.875rem;
-      font-weight: 600;
+      font-family: inherit;
+      font-size: 0.88rem;
+      letter-spacing: 0.12em;
+      padding: 9px 24px;
+      border-radius: 3px;
       cursor: pointer;
-      border: none;
-      transition: all 0.2s;
+      border: 1px solid;
+      text-transform: uppercase;
+      transition: all 0.15s;
+      background: transparent;
     }
-    .btn-primary {
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      color: #fff;
+    .btn-start {
+      color: var(--green);
+      border-color: var(--green2);
     }
-    .btn-primary:hover { filter: brightness(1.15); }
-    .btn-danger {
+    .btn-start:hover:not(:disabled) {
+      background: rgba(0,255,65,0.08);
+      box-shadow: 0 0 12px rgba(0,255,65,0.25);
+    }
+    .btn-stop {
+      color: var(--red);
+      border-color: #7a1515;
+    }
+    .btn-stop:hover:not(:disabled) {
+      background: rgba(255,51,51,0.08);
+      box-shadow: 0 0 12px rgba(255,51,51,0.2);
+    }
+    .btn:disabled { opacity: 0.25; cursor: not-allowed; }
+
+    /* ── Bottom bar ─────────────────────────────────────────── */
+    .bottombar {
       background: var(--panel);
-      color: var(--danger);
-      border: 1px solid var(--danger);
+      border-top: 1px solid var(--border);
+      padding: 7px 16px;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      color: var(--dim);
+      display: flex;
+      justify-content: space-between;
     }
-    .btn-danger:hover { background: var(--danger); color: #fff; }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .bottombar span { color: var(--dim); }
 
-    .hint {
-      color: var(--muted);
-      font-size: 0.78rem;
-      text-align: center;
-      max-width: 360px;
-    }
-    .hint kbd {
-      background: var(--border);
-      border-radius: 4px;
-      padding: 1px 6px;
-      font-family: monospace;
-    }
-
+    /* ── Error banner ───────────────────────────────────────── */
     #error-banner {
       display: none;
-      background: #2d1515;
-      border: 1px solid var(--danger);
-      color: var(--danger);
-      border-radius: 8px;
-      padding: 10px 16px;
-      font-size: 0.8rem;
-      max-width: 520px;
-      width: 100%;
+      color: var(--red);
+      font-size: 0.78rem;
       text-align: center;
+      padding: 6px 0;
+      letter-spacing: 0.06em;
     }
   </style>
 </head>
 <body>
 
-  <div class="header">
-    <h1>Network Security Voice Scanner</h1>
-    <p>Voice-controlled nmap scanning powered by VAPI + Claude</p>
+<div class="crt">
+
+  <!-- Title bar -->
+  <div class="titlebar">
+    <span class="titlebar-left">NET-SCAN // SECURITY TERMINAL v1.0</span>
+    <span class="titlebar-right"><span class="blink">■</span> ONLINE</span>
   </div>
 
-  <div class="orb-wrapper">
-    <div class="orb" id="orb">
-      <div class="pulse-ring"></div>
-      <!-- Microphone icon -->
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <path stroke-linecap="round" stroke-linejoin="round"
-          d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/>
-      </svg>
+  <div class="screen">
+
+    <!-- Orb -->
+    <div class="orb-row">
+      <div class="orb" id="orb">
+        <span class="icon-mic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/>
+          </svg>
+        </span>
+        <span class="icon-cog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+        </span>
+        <span class="icon-wave">
+          <span></span><span></span><span></span><span></span><span></span>
+        </span>
+      </div>
     </div>
+
+    <!-- Status -->
+    <div class="status-line" id="status">SYSTEM READY — PRESS [ INITIATE SCAN ] TO BEGIN</div>
+
+    <!-- Terminal output -->
+    <div class="terminal" id="terminal">
+      <div class="line system">
+        <span class="prompt">//</span>
+        <span class="text">NET-SCAN terminal ready. Session not started.<span class="cursor"></span></span>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div id="error-banner"></div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button class="btn btn-start" id="startBtn">[ INITIATE SCAN ]</button>
+      <button class="btn btn-stop"  id="stopBtn"  disabled>[ TERMINATE ]</button>
+    </div>
+
+  </div><!-- /screen -->
+
+  <!-- Bottom bar -->
+  <div class="bottombar">
+    <span>HOLD ORB TO SPEAK &nbsp;|&nbsp; RELEASE TO MUTE</span>
+    <span id="clock"></span>
   </div>
 
-  <div class="status-badge idle" id="badge">
-    <span class="dot"></span>
-    <span id="badge-text">Ready</span>
-  </div>
+</div><!-- /crt -->
 
-  <div id="error-banner"></div>
+<script type="module">
+  const { default: Vapi } = await import('https://esm.sh/@vapi-ai/web@2');
 
-  <div class="transcript-box" id="transcript">
-    <p class="system">Transcript will appear here once the call starts…</p>
-  </div>
+  // ── Clock ──────────────────────────────────────────────────────────────────
+  const clockEl = document.getElementById('clock');
+  function updateClock() {
+    clockEl.textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
 
-  <div class="controls">
-    <button class="btn btn-primary" id="startBtn">Start Session</button>
-    <button class="btn btn-danger" id="stopBtn" disabled>End Call</button>
-  </div>
+  // ── Config ─────────────────────────────────────────────────────────────────
+  let cfg;
+  try {
+    cfg = await fetch('/config.json').then(r => r.json());
+  } catch {
+    showError('ERR: could not load /config.json — is main.py running?');
+    throw new Error('no config');
+  }
 
-  <p class="hint" id="hint-idle">
-    Click <kbd>Start Session</kbd>, then hold the orb to speak.<br/>
-    Say <kbd>scan my network</kbd> to begin an nmap scan.
-  </p>
+  const vapi = new Vapi(cfg.publicKey);
 
-  <script type="module">
-    // Load VAPI web SDK from ESM CDN
-    const { default: Vapi } = await import('https://esm.sh/@vapi-ai/web@2');
+  // ── DOM refs ───────────────────────────────────────────────────────────────
+  const orb      = document.getElementById('orb');
+  const statusEl = document.getElementById('status');
+  const terminal = document.getElementById('terminal');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn  = document.getElementById('stopBtn');
 
-    // Fetch runtime config written by main.py
-    let cfg;
+  // ── Terminal output with typewriter ───────────────────────────────────────
+  let typeQueue   = Promise.resolve();
+  let activeCursor = null;
+  let lastAiTextSpan = null;   // reuse the same AI line for consecutive chunks
+
+  function setStatus(cls, text) {
+    statusEl.className = `status-line ${cls}`;
+    statusEl.textContent = text;
+  }
+
+  function setOrb(state) {
+    orb.className = 'orb ' + state;
+  }
+
+  // role: 'user' | 'ai' | 'system' | 'error'
+  // appendToLast: if true and role matches last line, append rather than new line
+  function addLine(role, text, instant = false, appendToLast = false) {
+    // clear one-time boot message
+    if (terminal.children.length === 1 && terminal.querySelector('.line.system')) {
+      terminal.innerHTML = '';
+      lastAiTextSpan = null;
+    }
+
+    // Always remove the previous cursor before queuing new text
+    if (activeCursor) { activeCursor.remove(); activeCursor = null; }
+
+    let textSpan;
+
+    if (appendToLast && lastAiTextSpan && role === 'ai') {
+      // Append a space + new chunk to the existing AI line
+      textSpan = lastAiTextSpan;
+    } else {
+
+      const prompts = { user: '>&nbsp;', ai: 'AI>', system: '//', error: '!!' };
+      const line = document.createElement('div');
+      line.className = 'line ' + role;
+      const promptSpan = document.createElement('span');
+      promptSpan.className = 'prompt';
+      promptSpan.innerHTML = prompts[role] ?? '//';
+      textSpan = document.createElement('span');
+      textSpan.className = 'text';
+      line.appendChild(promptSpan);
+      line.appendChild(textSpan);
+      terminal.appendChild(line);
+
+      if (role === 'ai') lastAiTextSpan = textSpan;
+      else lastAiTextSpan = null;
+    }
+
+    const prefix = appendToLast && lastAiTextSpan ? ' ' : '';
+    // Only AI lines get the typewriter; everything else is instant
+    const delay = (role === 'ai' && !instant) ? 14 : 0;
+    typeQueue = typeQueue.then(() => typeWrite(textSpan, prefix + text, delay));
+    return textSpan;
+  }
+
+  async function typeWrite(el, text, delay) {
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    el.appendChild(cursor);
+    activeCursor = cursor;
+
+    for (const ch of text) {
+      if (!cursor.isConnected) return;
+      cursor.insertAdjacentText('beforebegin', ch);
+      terminal.scrollTop = terminal.scrollHeight;
+      if (delay > 0) await sleep(delay);
+    }
+    terminal.scrollTop = terminal.scrollHeight;
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  function showError(msg) {
+    addLine('error', msg, true);
+  }
+
+  // ── VAPI events ────────────────────────────────────────────────────────────
+  let callActive = false;
+
+  vapi.on('call-start', () => {
+    callActive = true;
+    vapi.setMuted(true);
+    setOrb('idle');
+    setStatus('green', 'SESSION ACTIVE — HOLD ORB TO SPEAK');
+    startBtn.disabled = true;
+    stopBtn.disabled  = false;
+    addLine('system', 'Session established. Hold orb to speak.', true);
+  });
+
+  vapi.on('call-end', () => {
+    callActive = false;
+    setOrb('');
+    setStatus('', 'SESSION TERMINATED');
+    startBtn.disabled = false;
+    stopBtn.disabled  = true;
+    addLine('system', 'Session terminated.', true);
+  });
+
+  vapi.on('speech-start', () => {
+    setOrb('speaking');
+    setStatus('amber', 'AI SPEAKING');
+    clearTimeout(thinkingTimer);
+  });
+
+  vapi.on('speech-end', () => {
+    lastAiTextSpan = null;   // next AI turn gets a new line
+    setOrb('idle');
+    setStatus('green', 'HOLD ORB TO SPEAK');
+  });
+
+  vapi.on('message', (msg) => {
+    if (msg.type === 'transcript' && msg.transcriptType === 'final') {
+      if (msg.role === 'user')      addLine('user', msg.transcript);
+      if (msg.role === 'assistant') addLine('ai', msg.transcript, false, true);
+    }
+    if (msg.type === 'tool-calls') {
+      lastAiTextSpan = null;   // next AI message starts a fresh line
+      setOrb('scanning');
+      setStatus('amber', 'SCANNING NETWORK — PLEASE WAIT');
+      addLine('system', 'Running nmap scan...');
+    }
+    if (msg.type === 'tool-calls-result') {
+      setOrb('speaking');
+      setStatus('amber', 'AI SPEAKING');
+    }
+  });
+
+  vapi.on('error', (err) => {
+    console.error('VAPI error', err);
+    // Extract a readable message — ignore noisy ejected/ended events
+    const raw = err?.error?.message ?? err?.message ?? err;
+    const msg = typeof raw === 'object' ? (raw.msg ?? raw.type ?? JSON.stringify(raw)) : String(raw);
+    if (msg === 'Meeting has ended') return;  // expected on call end, not a real error
+    showError(`ERR: ${msg}`);
+    setOrb('');
+    setStatus('red', 'ERROR');
+    startBtn.disabled = false;
+    stopBtn.disabled  = true;
+  });
+
+  // ── Controls ───────────────────────────────────────────────────────────────
+  startBtn.addEventListener('click', async () => {
+    startBtn.disabled = true;
+    setStatus('green', 'CONNECTING...');
+    addLine('system', 'Establishing session...', true);
     try {
-      const r = await fetch('/config.json');
-      cfg = await r.json();
-    } catch {
-      showError('Could not load /config.json — make sure main.py is running.');
-      throw new Error('no config');
-    }
-
-    const vapi = new Vapi(cfg.publicKey);
-
-    const orb       = document.getElementById('orb');
-    const badge     = document.getElementById('badge');
-    const badgeText = document.getElementById('badge-text');
-    const startBtn  = document.getElementById('startBtn');
-    const stopBtn   = document.getElementById('stopBtn');
-    const tx        = document.getElementById('transcript');
-
-    function setStatus(state, label) {
-      badge.className = `status-badge ${state}`;
-      badgeText.textContent = label;
-      orb.className = `orb ${state === 'active' || state === 'speak' ? 'active' : state === 'scan' ? 'active' : ''}`;
-      if (state === 'speak') orb.classList.add('speaking');
-    }
-
-    function addLine(role, text) {
-      const p = document.createElement('p');
-      p.className = role;
-      p.textContent = (role === 'user' ? 'You: ' : role === 'assistant' ? 'AI: ' : '') + text;
-      if (tx.querySelector('.system')) tx.innerHTML = '';
-      tx.appendChild(p);
-      tx.scrollTop = tx.scrollHeight;
-    }
-
-    function showError(msg) {
-      const el = document.getElementById('error-banner');
-      el.textContent = msg;
-      el.style.display = 'block';
-    }
-
-    // ── VAPI event listeners ──────────────────────────────────────────────────
-
-    let callActive = false;
-
-    vapi.on('call-start', () => {
-      callActive = true;
-      vapi.setMuted(true);          // start muted — user must hold to speak
-      setStatus('idle', 'Hold orb to speak');
-      startBtn.disabled = true;
-      stopBtn.disabled  = false;
-      addLine('system', 'Call started — hold the orb to speak');
-    });
-
-    vapi.on('call-end', () => {
-      callActive = false;
-      setStatus('idle', 'Ready');
+      await vapi.start(cfg.assistantId);
+    } catch (e) {
+      showError(`Failed to connect: ${e.message}`);
       startBtn.disabled = false;
-      stopBtn.disabled  = true;
-      addLine('system', 'Call ended');
-    });
-
-    vapi.on('speech-start', () => {
-      setStatus('speak', 'AI Speaking');
-    });
-
-    vapi.on('speech-end', () => {
-      setStatus('idle', 'Hold orb to speak');
-    });
-
-    vapi.on('message', (msg) => {
-      if (msg.type === 'transcript') {
-        if (msg.transcriptType === 'final') {
-          if (msg.role === 'user') addLine('user', msg.transcript);
-          if (msg.role === 'assistant') addLine('assistant', msg.transcript);
-        }
-      }
-      if (msg.type === 'tool-calls') {
-        setStatus('scan', 'Scanning Network…');
-        addLine('system', 'Running nmap scan — please wait…');
-      }
-      if (msg.type === 'tool-calls-result') {
-        setStatus('speak', 'AI Speaking');
-      }
-    });
-
-    vapi.on('error', (err) => {
-      console.error('VAPI error', err);
-      showError(`Error: ${err?.message || JSON.stringify(err)}`);
-      setStatus('idle', 'Error');
-      startBtn.disabled = false;
-      stopBtn.disabled  = true;
-    });
-
-    // ── Controls ──────────────────────────────────────────────────────────────
-
-    startBtn.addEventListener('click', async () => {
-      startBtn.disabled = true;
-      setStatus('active', 'Connecting…');
-      try {
-        await vapi.start(cfg.assistantId);
-      } catch (e) {
-        showError(`Failed to start call: ${e.message}`);
-        startBtn.disabled = false;
-        setStatus('idle', 'Ready');
-      }
-    });
-
-    stopBtn.addEventListener('click', () => {
-      vapi.stop();
-    });
-
-    function startSpeaking() {
-      if (!callActive) return;
-      vapi.setMuted(false);
-      setStatus('active', 'Listening…');
+      setStatus('red', 'CONNECTION FAILED');
     }
+  });
 
-    function stopSpeaking() {
-      if (!callActive) return;
-      vapi.setMuted(true);
-      setStatus('idle', 'Hold orb to speak');
-    }
+  stopBtn.addEventListener('click', () => vapi.stop());
 
-    orb.addEventListener('mousedown',  startSpeaking);
-    orb.addEventListener('mouseup',    stopSpeaking);
-    orb.addEventListener('mouseleave', stopSpeaking);
-    orb.addEventListener('touchstart', (e) => { e.preventDefault(); startSpeaking(); }, { passive: false });
-    orb.addEventListener('touchend',   (e) => { e.preventDefault(); stopSpeaking(); },  { passive: false });
+  // ── Hold-to-talk ───────────────────────────────────────────────────────────
+  let thinkingTimer = null;
 
-    orb.addEventListener('click', () => {
-      if (!callActive && !startBtn.disabled) startBtn.click();
-    });
-  </script>
+  function startSpeaking() {
+    if (!callActive) return;
+    clearTimeout(thinkingTimer);
+    vapi.setMuted(false);
+    setOrb('listening');
+    setStatus('green', 'LISTENING...');
+  }
+  function stopSpeaking() {
+    if (!callActive) return;
+    vapi.setMuted(true);
+    // Short delay so mic-release doesn't flicker if AI responds instantly
+    thinkingTimer = setTimeout(() => {
+      setOrb('thinking');
+      setStatus('', 'PROCESSING...');
+    }, 300);
+  }
+
+  orb.addEventListener('mousedown',  startSpeaking);
+  orb.addEventListener('mouseup',    stopSpeaking);
+  orb.addEventListener('mouseleave', stopSpeaking);
+  orb.addEventListener('touchstart', e => { e.preventDefault(); startSpeaking(); }, { passive: false });
+  orb.addEventListener('touchend',   e => { e.preventDefault(); stopSpeaking();  }, { passive: false });
+  orb.addEventListener('click', () => {
+    if (!callActive && !startBtn.disabled) startBtn.click();
+  });
+</script>
 </body>
 </html>
