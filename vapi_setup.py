@@ -16,11 +16,13 @@ After receiving scan results, deliver a clear voice report:
 2. Briefly describe each device (IP, hostname, identifiable software)
 3. Call out CRITICAL issues first, then HIGH, then MEDIUM/LOW
 4. Give one actionable recommendation per risk
-5. Offer to elaborate on any specific device or issue
+5. After finishing the full results, always ask: "Would you like me to generate a PDF report of these findings? It'll include everything I just covered, plus plain-English explanations and step-by-step fix instructions for each issue."
+
+If the user says yes (or anything affirmative like "sure", "please", "go ahead", "yeah") after you offer the PDF, call the generateReport tool immediately.
 
 Keep your spoken responses concise — the user is listening, not reading. Use plain language, not technical jargon. Spell out abbreviations (say "S-M-B" not "SMB", say "Remote Desktop" not "RDP").
 
-If no risks are found, reassure the user their network looks clean.
+If no risks are found, reassure the user their network looks clean, then still offer the PDF report.
 If the scan errors out, suggest checking that nmap is installed."""
 
 
@@ -90,7 +92,37 @@ def create_assistant(api_key: str, webhook_url: str) -> dict:
                         },
                     },
                     "server": {"url": f"{webhook_url}/webhook"},
-                }
+                },
+                {
+                    "type": "function",
+                    "async": False,
+                    "messages": [
+                        {
+                            "type": "request-start",
+                            "content": "Generating your PDF report now — just a moment.",
+                            "blocking": True,
+                        },
+                        {
+                            "type": "request-failed",
+                            "content": "Sorry, I wasn't able to generate the report. Please try again.",
+                        },
+                    ],
+                    "function": {
+                        "name": "generateReport",
+                        "description": (
+                            "Generates a PDF security report from the most recent scan results. "
+                            "Call this when the user confirms they want a PDF report. "
+                            "The report includes plain-English explanations and fix instructions "
+                            "for every finding. The browser will automatically download it."
+                        ),
+                        "parameters": {
+                            "type": "object",
+                            "properties": {},
+                            "required": [],
+                        },
+                    },
+                    "server": {"url": f"{webhook_url}/webhook"},
+                },
             ],
         },
         "voice": {

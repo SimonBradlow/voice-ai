@@ -328,6 +328,29 @@
       setStatus('idle', 'Hold orb to speak');
     });
 
+    // Tracks whether a generateReport tool call is in flight
+    let pendingPdfDownload = false;
+
+    async function downloadPdfReport() {
+      try {
+        addLine('system', 'Downloading PDF report…');
+        const resp = await fetch('/api/download-pdf');
+        if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
+        const blob = await resp.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = 'network-security-report.pdf';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        addLine('system', 'PDF report downloaded.');
+      } catch (err) {
+        showError(`PDF download failed: ${err.message}`);
+      }
+    }
+
     vapi.on('message', (msg) => {
       if (msg.type === 'transcript') {
         if (msg.transcriptType === 'final') {
@@ -336,10 +359,20 @@
         }
       }
       if (msg.type === 'tool-calls') {
-        setStatus('scan', 'Scanning Network…');
-        addLine('system', 'Running nmap scan — please wait…');
+        const toolNames = (msg.toolCallList || []).map(t => t?.function?.name);
+        if (toolNames.includes('generateReport')) {
+          pendingPdfDownload = true;
+          addLine('system', 'Generating PDF report…');
+        } else {
+          setStatus('scan', 'Scanning Network…');
+          addLine('system', 'Running nmap scan — please wait…');
+        }
       }
       if (msg.type === 'tool-calls-result') {
+        if (pendingPdfDownload) {
+          pendingPdfDownload = false;
+          downloadPdfReport();
+        }
         setStatus('speak', 'AI Speaking');
       }
     });
