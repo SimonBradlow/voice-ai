@@ -466,26 +466,32 @@
   }
 
   // ── PDF download ───────────────────────────────────────────────────────────
-  let pendingPdfDownload = false;
-
-  async function downloadPdfReport() {
-    try {
-      addLine('system', 'Downloading PDF report...', true);
-      const resp = await fetch('/api/download-pdf');
-      if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
-      const blob = await resp.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = 'network-security-report.pdf';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      addLine('system', 'PDF report downloaded.', true);
-    } catch (err) {
-      showError(`PDF download failed: ${err.message}`);
+  // Poll /api/download-pdf until the server has the PDF ready, then trigger
+  // the browser download. Polling is used so the download works even if the
+  // VAPI call ends before tool-calls-result fires.
+  async function pollAndDownloadPdf() {
+    const MAX_ATTEMPTS = 20;
+    const INTERVAL_MS  = 800;
+    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+      await sleep(INTERVAL_MS);
+      try {
+        const resp = await fetch('/api/download-pdf');
+        if (resp.ok) {
+          const blob = await resp.blob();
+          const url  = URL.createObjectURL(blob);
+          const a    = document.createElement('a');
+          a.href     = url;
+          a.download = 'network-security-report.pdf';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          addLine('system', 'PDF report downloaded.', true);
+          return;
+        }
+      } catch (_) { /* server not ready yet, keep polling */ }
     }
+    showError('PDF generation timed out. Please try again.');
   }
 
   // ── VAPI events ────────────────────────────────────────────────────────────
@@ -531,8 +537,8 @@
       lastAiTextSpan = null;   // next AI message starts a fresh line
       const toolNames = (msg.toolCallList || []).map(t => t?.function?.name);
       if (toolNames.includes('generateReport')) {
-        pendingPdfDownload = true;
         addLine('system', 'Generating PDF report...', true);
+        pollAndDownloadPdf();  // start polling immediately — works even if call ends first
       } else {
         setOrb('scanning');
         setStatus('amber', 'SCANNING NETWORK — PLEASE WAIT');
@@ -540,10 +546,6 @@
       }
     }
     if (msg.type === 'tool-calls-result') {
-      if (pendingPdfDownload) {
-        pendingPdfDownload = false;
-        downloadPdfReport();
-      }
       setOrb('speaking');
       setStatus('amber', 'AI SPEAKING');
     }

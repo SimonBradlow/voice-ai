@@ -3,11 +3,16 @@ Network scanner using nmap. Discovers devices, detects open ports,
 and flags security risks on the local WiFi network.
 """
 
+import os
+import shutil
 import socket
 import ipaddress
 import nmap
 
-NMAP_PATH = "/Applications/nmap.app/Contents/Resources/bin/nmap"
+# Support both the nmap.app macOS install and a Homebrew/system install
+_APP_NMAP   = "/Applications/nmap.app/Contents/Resources/bin/nmap"
+_BREW_NMAP  = shutil.which("nmap") or "/opt/homebrew/bin/nmap"
+NMAP_PATH   = _APP_NMAP if os.path.exists(_APP_NMAP) else _BREW_NMAP
 
 # Ports to scan and their risk profiles
 RISKY_PORTS = {
