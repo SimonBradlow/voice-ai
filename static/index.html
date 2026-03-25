@@ -234,6 +234,67 @@
       animation: blink 1s step-end infinite;
     }
 
+    /* ── Device table ───────────────────────────────────────── */
+    .device-table-wrap {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .device-table-wrap.visible { display: flex; }
+
+    .device-table-header {
+      font-size: 0.78rem;
+      letter-spacing: 0.12em;
+      color: var(--dim);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .device-table-header span { color: var(--green); text-shadow: 0 0 6px var(--green); }
+
+    table.devices {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    table.devices th {
+      text-align: left;
+      color: var(--dim);
+      font-weight: normal;
+      letter-spacing: 0.1em;
+      border-bottom: 1px solid var(--border);
+      padding: 4px 8px;
+      font-size: 0.75rem;
+    }
+    table.devices td {
+      padding: 5px 8px;
+      border-bottom: 1px solid #0f1f0f;
+      color: var(--green2);
+      vertical-align: middle;
+    }
+    table.devices tr:hover td { background: rgba(0,255,65,0.04); }
+    table.devices tr { cursor: pointer; }
+
+    .risk-badge {
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      padding: 2px 6px;
+      border-radius: 2px;
+      font-weight: bold;
+    }
+    .risk-CRITICAL { color: #ff3333; border: 1px solid #7a1515; }
+    .risk-HIGH     { color: var(--amber); border: 1px solid #7a5000; }
+    .risk-MEDIUM   { color: #ffdd00; border: 1px solid #6a5800; }
+    .risk-LOW      { color: var(--dim); border: 1px solid var(--border); }
+    .risk-CLEAN    { color: var(--dim); border: 1px solid var(--border); }
+
+    .vuln-hint {
+      font-size: 0.75rem;
+      color: var(--dim);
+      letter-spacing: 0.08em;
+      text-align: center;
+    }
+
     /* ── Controls ───────────────────────────────────────────── */
     .controls {
       display: flex;
@@ -342,6 +403,27 @@
 
     <!-- Error -->
     <div id="error-banner"></div>
+
+    <!-- Device table (shown after scan) -->
+    <div class="device-table-wrap" id="deviceTableWrap">
+      <div class="device-table-header">
+        <span>// DISCOVERED DEVICES</span>
+        <span id="deviceTableNet" style="color:var(--dim);font-size:0.75rem;"></span>
+      </div>
+      <table class="devices" id="deviceTable">
+        <thead>
+          <tr>
+            <th>IP ADDRESS</th>
+            <th>HOSTNAME</th>
+            <th>TYPE / MAKE</th>
+            <th>RISK</th>
+            <th>OPEN PORTS</th>
+          </tr>
+        </thead>
+        <tbody id="deviceTableBody"></tbody>
+      </table>
+      <div class="vuln-hint">Click a row or say "scan [IP]" to run a deep vulnerability scan</div>
+    </div>
 
     <!-- Controls -->
     <div class="controls">
@@ -514,6 +596,7 @@
     setOrb('speaking');
     setStatus('amber', 'AI SPEAKING');
     clearTimeout(thinkingTimer);
+    fetchDevices();   // pick up any scan results that just completed
   });
 
   vapi.on('speech-end', () => {
@@ -528,15 +611,22 @@
       if (msg.role === 'assistant') addLine('ai', msg.transcript, false, true);
     }
     if (msg.type === 'tool-calls') {
-      lastAiTextSpan = null;   // next AI message starts a fresh line
+      lastAiTextSpan = null;
       const toolNames = (msg.toolCallList || []).map(t => t?.function?.name);
-      if (toolNames.includes('generateReport')) {
+      const toolName  = toolNames[0] ?? '';
+      if (toolName === 'generateReport') {
         pendingPdfDownload = true;
         addLine('system', 'Generating PDF report...', true);
       } else {
         setOrb('scanning');
-        setStatus('amber', 'SCANNING NETWORK — PLEASE WAIT');
-        addLine('system', 'Running nmap scan...');
+        if (toolName === 'runVulnScan') {
+          const ip = msg.toolCallList?.[0]?.function?.arguments?.ip ?? '';
+          setStatus('amber', `VULN SCAN — ${ip}`);
+          addLine('system', `Deep scanning ${ip}...`);
+        } else {
+          setStatus('amber', 'SCANNING NETWORK — PLEASE WAIT');
+          addLine('system', 'Running nmap scan...');
+        }
       }
     }
     if (msg.type === 'tool-calls-result') {
@@ -546,6 +636,8 @@
       }
       setOrb('speaking');
       setStatus('amber', 'AI SPEAKING');
+      // Refresh device table after any tool call completes
+      fetchDevices();
     }
   });
 
@@ -606,6 +698,54 @@
   orb.addEventListener('click', () => {
     if (!callActive && !startBtn.disabled) startBtn.click();
   });
+
+  // ── Device table ───────────────────────────────────────────────────────────
+  const deviceTableWrap = document.getElementById('deviceTableWrap');
+  const deviceTableBody = document.getElementById('deviceTableBody');
+  const deviceTableNet  = document.getElementById('deviceTableNet');
+
+  async function fetchDevices() {
+    try {
+      const data = await fetch('/api/devices').then(r => r.json());
+      if (!data.scanned || !data.devices.length) return;
+      renderDeviceTable(data.devices, data.network);
+    } catch { /* server not ready yet */ }
+  }
+
+  function renderDeviceTable(devices, network) {
+    deviceTableNet.textContent = network;
+    deviceTableBody.innerHTML  = '';
+
+    for (const dev of devices) {
+      const tr        = document.createElement('tr');
+      const portNames = dev.open_ports.slice(0, 4).map(p => p.port).join(', ')
+                        + (dev.open_ports.length > 4 ? ` +${dev.open_ports.length - 4}` : '');
+      const riskClass = `risk-${dev.risk_level}`;
+      const typeMake  = [dev.make, dev.device_type]
+                          .filter(s => s && s !== 'Unknown').join(' · ') || '—';
+
+      tr.innerHTML = `
+        <td>${dev.ip}</td>
+        <td>${dev.hostname || '—'}</td>
+        <td>${typeMake}</td>
+        <td><span class="risk-badge ${riskClass}">${dev.risk_level}</span></td>
+        <td>${portNames || '—'}</td>
+      `;
+      tr.title = `Click to run vulnerability scan on ${dev.ip}`;
+      tr.addEventListener('click', () => {
+        if (!callActive) return;
+        // Speak the IP so VAPI hears it and calls runVulnScan
+        addLine('system', `Requesting vuln scan for ${dev.ip}...`);
+        vapi.send({
+          type: 'add-message',
+          message: { role: 'user', content: `Run a vulnerability scan on ${dev.ip}` },
+        });
+      });
+      deviceTableBody.appendChild(tr);
+    }
+
+    deviceTableWrap.classList.add('visible');
+  }
 </script>
 </body>
 </html>

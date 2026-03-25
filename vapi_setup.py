@@ -7,23 +7,25 @@ import httpx
 
 VAPI_BASE = "https://api.vapi.ai"
 
-SYSTEM_PROMPT = """You are a network security analyst assistant. You help users understand the security posture of their WiFi network through voice conversation.
+SYSTEM_PROMPT = """You are a network security assistant. Be extremely concise — the user is listening, not reading. Never elaborate unless explicitly asked.
 
-When a user asks you to scan their network (e.g. "scan my network", "check my wifi", "find devices"), call the runNetworkScan tool immediately.
+NETWORK SCAN (runNetworkScan):
+Call immediately when asked to scan the network.
+After results: one sentence — total devices and issue counts only. Do NOT list devices or IPs; they are in the on-screen table. End with: "Check the table for details. Want me to deep-scan any device?"
 
-After receiving scan results, deliver a clear voice report:
-1. State how many devices were found
-2. Briefly describe each device (IP, hostname, identifiable software)
-3. Call out CRITICAL issues first, then HIGH, then MEDIUM/LOW
-4. Give one actionable recommendation per risk
-5. After finishing the full results, always ask: "Would you like me to generate a PDF report of these findings? It'll include everything I just covered, plus plain-English explanations and step-by-step fix instructions for each issue."
+VULN SCAN (runVulnScan):
+Call when asked to scan a specific device. Use the IP from the previous scan if the user describes a device by type.
+After results: one sentence per critical or high finding, nothing else. No advice unless asked.
 
-If the user says yes (or anything affirmative like "sure", "please", "go ahead", "yeah") after you offer the PDF, call the generateReport tool immediately.
+PDF REPORT (generateReport):
+Call when the user confirms they want a PDF report. Offer it after a network scan if significant risks were found.
+After generating: one sentence confirming it's downloading.
 
-Keep your spoken responses concise — the user is listening, not reading. Use plain language, not technical jargon. Spell out abbreviations (say "S-M-B" not "SMB", say "Remote Desktop" not "RDP").
-
-If no risks are found, reassure the user their network looks clean, then still offer the PDF report.
-If the scan errors out, suggest checking that nmap is installed."""
+RULES:
+- Never volunteer explanations, recommendations, or context unless the user asks.
+- Never say IP addresses aloud — refer to devices by type (e.g. "the Windows machine", "the router") or "the device in the table".
+- Say "S-M-B" not "SMB". Say "R-D-P" not "RDP".
+- If no risks found, say so in one sentence."""
 
 
 def _headers(api_key: str) -> dict:
@@ -89,6 +91,40 @@ def create_assistant(api_key: str, webhook_url: str) -> dict:
                                 }
                             },
                             "required": [],
+                        },
+                    },
+                    "server": {"url": f"{webhook_url}/webhook", "timeoutSeconds": 60},
+                },
+                {
+                    "type": "function",
+                    "async": False,
+                    "messages": [
+                        {
+                            "type": "request-start",
+                            "content": "Running a deep vulnerability scan on that device. This takes about 30 seconds.",
+                            "blocking": True,
+                        },
+                        {
+                            "type": "request-failed",
+                            "content": "The vulnerability scan failed. Please check the device is still online and try again.",
+                        },
+                    ],
+                    "function": {
+                        "name": "runVulnScan",
+                        "description": (
+                            "Runs a targeted vulnerability scan on a single device. "
+                            "Detects all open services with version info so risks can be assessed. "
+                            "Call this when the user asks to scan a specific device or IP address."
+                        ),
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "ip": {
+                                    "type": "string",
+                                    "description": "IP address of the device to scan, e.g. '192.168.1.5'.",
+                                }
+                            },
+                            "required": ["ip"],
                         },
                     },
                     "server": {"url": f"{webhook_url}/webhook", "timeoutSeconds": 60},
